@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Turning a recording into a GIF: replaying it through a virtual terminal
 //! and rendering frames at the (adjusted) event times.
 

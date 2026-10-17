@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Box drawing (U+2500-U+257F) and block elements (U+2580-U+259F) are drawn
 //! procedurally, so that they connect seamlessly across cells regardless of
 //! the font and the line height.

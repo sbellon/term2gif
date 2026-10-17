@@ -27,6 +27,12 @@ clean. CI runs check, clippy, build and test on both Ubuntu and Windows.
   or allow them on the single item with a reason. Use `From` for lossless
   casts everywhere.
 - Proper names that trip `doc_markdown` go into `clippy.toml`.
+- Every Rust file starts with an SPDX header (`// SPDX-FileCopyrightText:
+  <years> <name>`, `//`, `// SPDX-License-Identifier: MIT`), checked by
+  `tests/spdx.rs`. The hook adds it to new `.rs` files and extends the
+  committer's year range (`2026` → `2026-2027`) in changed files, then stops
+  so the change can be staged. Files that cannot carry a header (the fonts)
+  are covered by `REUSE.toml`.
 - Cross-target matters: Windows-only code (`winvt` in `src/recorder.rs`) is
   invisible to native checks on Linux, and the Unix parts of `src/xterm.rs`
   on Windows. Lint the other side with

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Finding X11 bitmap fonts the way xterm names them: aliases such as
 //! `fixed` or `9x15`, XLFD names (wildcards allowed), or file paths.
 //!

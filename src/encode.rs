@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! GIF encoding of a sequence of canvases.
 //!
 //! Each frame stores only the rectangle that changed since the previous one,

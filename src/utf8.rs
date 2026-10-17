@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Incremental UTF-8 decoding for PTY output.
 //!
 //! PTY reads can end in the middle of a multi-byte character. asciicast event

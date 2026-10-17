@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Reading X11 bitmap fonts in PCF format (`.pcf`, `.pcf.gz`), such as
 //! xterm's default `fixed` font.
 

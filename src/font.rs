@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Fonts: the bundled DejaVu Sans Mono, optionally preferred system families
 //! or an X11 bitmap font, and a per-character fallback to any installed font
 //! (e.g. for CJK or emoji).
