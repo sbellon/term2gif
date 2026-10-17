@@ -143,6 +143,15 @@ fn build_command(command: Option<&str>) -> Result<CommandBuilder> {
 
     // Same marker asciinema sets, so shell prompts can detect a recording.
     cmd.env("ASCIINEMA_REC", "1");
+
+    // Behind term2gif's ConPTY, Clink does not detect Windows Terminal and
+    // falls back to a mode that redraws multi-line prompts (e.g. Oh My Posh)
+    // one line too high. Name the host for it, unless the user already did.
+    #[cfg(windows)]
+    if std::env::var_os("WT_SESSION").is_some() && std::env::var_os("CLINK_ANSI_HOST").is_none() {
+        cmd.env("CLINK_ANSI_HOST", "winterminal");
+    }
+
     cmd.cwd(std::env::current_dir().context("cannot determine the current directory")?);
 
     Ok(cmd)
