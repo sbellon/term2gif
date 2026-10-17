@@ -43,12 +43,17 @@ clean. CI runs check, clippy, build and test on both Ubuntu and Windows.
 ## Releases
 
 Add user-visible changes under `## Unreleased` in `CHANGELOG.md` as part of
-the change itself. A release is cut with `uvx bump-my-version bump
-patch|minor|major` (config in `.bumpversion.toml`): it rewrites the version
-in `Cargo.toml` (the PyPI version is taken from there), turns the
-`## Unreleased` heading into the new version, updates `Cargo.lock` and
-commits. After pushing that, publishing a GitHub release with the tag
-`v<version>` runs `.github/workflows/release.yml`, which builds the binaries
+the change itself. A release is cut on a branch (`main` takes no direct
+pushes) with `uvx bump-my-version bump patch|minor|major` (config in
+`.bumpversion.toml`): it rewrites the version in `Cargo.toml` (the PyPI
+version is taken from there), turns the `## Unreleased` heading into the new
+version, updates `Cargo.lock` and commits. After merging that, the GitHub
+release is created on `main` with the version's changelog section as notes:
+
+    awk -v v=0.1.1 -f .github/release-notes.awk CHANGELOG.md > target/release-notes.md &&
+        gh release create v0.1.1 --title 0.1.1 --notes-file target/release-notes.md
+
+Publishing it runs `.github/workflows/release.yml`, which builds the binaries
 once and publishes them as release archives, PyPI wheels (`term2gif-rs`,
 via maturin, `pyproject.toml`; the name `term2gif` is taken there) and the
 crates.io crate (`term2gif`), all with trusted publishing. Running the
