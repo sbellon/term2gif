@@ -1,0 +1,2 @@
+# Proper names that are not code, for clippy::doc_markdown.
+doc-valid-idents = ["DejaVu", "FreeType", "ConPTY", "XTerm", "UXTerm", ".."]

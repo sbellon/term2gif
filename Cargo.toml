@@ -1,0 +1,37 @@
+[package]
+name = "term2gif"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.86"
+description = "Record a terminal session and save it as a GIF, in a single binary"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+# Cross-platform PTY (Unix openpty, Windows ConPTY) and terminal handling.
+portable-pty = "0.9"
+crossterm = "0.29"
+serde_json = "1"
+tempfile = "3"
+# Rendering: virtual terminal, font discovery, glyph rasterization, GIF encoding.
+avt = "0.18"
+fontdb = "0.24"
+swash = "0.2.10"
+gif = "0.14"
+flate2 = "1.1.10"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+
+[target.'cfg(windows)'.dependencies]
+# Needed to enable VT input/output processing on the Windows console.
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Console"] }
+
+[target."cfg(unix)".dependencies]
+libc = "0.2.191"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
