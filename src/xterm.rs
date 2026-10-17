@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Detecting the font of the xterm (or uxterm) that term2gif runs in, so the
 //! GIF looks like the terminal.
 //!

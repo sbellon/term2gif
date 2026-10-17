@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Color themes: background, foreground and the 16 ANSI colors.
 
 use anyhow::{Result, anyhow, bail};

@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Rendering the terminal state into an RGB canvas.
 
 // Pixel and font geometry mixes integer types and floats throughout; the

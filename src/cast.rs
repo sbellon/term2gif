@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Reading asciicast recordings (v2 as written by the recorder, and v3 as
 //! written by asciinema 3).
 

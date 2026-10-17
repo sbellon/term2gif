@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! term2gif: record a terminal session and save it as a GIF, in a single binary.
 //!
 //! Recording is done by a built-in PTY recorder (asciicast v2); the recording

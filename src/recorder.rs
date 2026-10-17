@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! Terminal session recorder producing an asciicast v2 file.
 //!
 //! A PTY (`portable-pty`: Unix openpty / Windows ConPTY) runs the shell or

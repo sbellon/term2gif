@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Stefan Bellon
+//
+// SPDX-License-Identifier: MIT
+
 //! End-to-end: render a recording with the real binary.
 
 use std::path::PathBuf;
