@@ -1,6 +1,6 @@
 # ChangeLog
 
-## Unreleased
+## 0.1.0 (2026-10-17)
 
 ### Added
 - first release: record a terminal session (or render an asciicast v2/v3
