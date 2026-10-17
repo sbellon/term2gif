@@ -92,14 +92,26 @@ Rendering and timing:
 - **GIF encoding**: [`gif`](https://crates.io/crates/gif). Each frame stores
   only the changed area, and terminal colors are kept exact.
 
+## Install
+
+- **Prebuilt binary**: download the archive for GNU/Linux (x86_64, static, so
+  it runs on any distribution) or Windows (x86_64) from the
+  [releases](https://github.com/sbellon/term2gif/releases) and put
+  `term2gif` on your `PATH`.
+- **With [uv](https://docs.astral.sh/uv/)** (PyPI package `term2gif-rs`, which
+  contains the same binary): `uv tool install term2gif-rs`, or without
+  installing: `uvx --from term2gif-rs term2gif demo.gif`.
+- **With cargo**: `cargo binstall term2gif` (downloads the prebuilt binary) or
+  `cargo install term2gif` (builds it, needs Rust 1.86 or newer).
+
+Windows needs Windows 10 version 1809 or newer (ConPTY).
+
 ## Build
 
 ```sh
 cargo build --release      # needs Rust 1.86 or newer; binary: target/release/term2gif
 cargo install --path .
 ```
-
-Windows needs Windows 10 version 1809 or newer (ConPTY).
 
 ## Limitations
 
@@ -111,6 +123,7 @@ Windows needs Windows 10 version 1809 or newer (ConPTY).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The bundled DejaVu Sans Mono fonts are under the
-Bitstream Vera license, see [fonts/DejaVu-LICENSE.txt](fonts/DejaVu-LICENSE.txt).
+MIT, see [LICENSE](https://github.com/sbellon/term2gif/blob/main/LICENSE). The
+bundled DejaVu Sans Mono fonts are under the Bitstream Vera license, see
+[fonts/DejaVu-LICENSE.txt](https://github.com/sbellon/term2gif/blob/main/fonts/DejaVu-LICENSE.txt).
 Dependencies are under MIT, Apache-2.0 or similar permissive licenses.

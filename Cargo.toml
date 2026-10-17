@@ -5,6 +5,12 @@ edition = "2024"
 rust-version = "1.86"
 description = "Record a terminal session and save it as a GIF, in a single binary"
 license = "MIT"
+repository = "https://github.com/sbellon/term2gif"
+readme = "README.md"
+keywords = ["terminal", "gif", "recorder", "asciicast", "asciinema"]
+categories = ["command-line-utilities", "multimedia::images"]
+# What goes into the crates.io package (Cargo.toml and Cargo.lock always do).
+include = ["/src", "/fonts", "/tests", "/README.md", "/CHANGELOG.md", "/LICENSE"]
 
 [dependencies]
 anyhow = "1"
@@ -30,6 +36,15 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.191"
+
+# `cargo binstall term2gif` downloads the archives of a GitHub release.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ version }-{ target }{ archive-suffix }"
+bin-dir = "{ name }-{ version }-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
 
 [profile.release]
 strip = true

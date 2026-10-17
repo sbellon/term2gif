@@ -40,6 +40,20 @@ clean. CI runs check, clippy, build and test on both Ubuntu and Windows.
   (or `x86_64-unknown-linux-musl` from Windows; cargo check/clippy don't
   link, so no cross toolchain is needed).
 
+## Releases
+
+Add user-visible changes under `## Unreleased` in `CHANGELOG.md` as part of
+the change itself. A release is cut with `uvx bump-my-version bump
+patch|minor|major` (config in `.bumpversion.toml`): it rewrites the version
+in `Cargo.toml` (the PyPI version is taken from there), turns the
+`## Unreleased` heading into the new version, updates `Cargo.lock` and
+commits. After pushing that, publishing a GitHub release with the tag
+`v<version>` runs `.github/workflows/release.yml`, which builds the binaries
+once and publishes them as release archives, PyPI wheels (`term2gif-rs`,
+via maturin, `pyproject.toml`; the name `term2gif` is taken there) and the
+crates.io crate (`term2gif`), all with trusted publishing. Running the
+workflow by hand only builds.
+
 ## Architecture
 
 Recording, then rendering; `--from-cast` skips the recording.

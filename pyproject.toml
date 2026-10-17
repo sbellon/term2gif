@@ -1,0 +1,31 @@
+# The PyPI package: maturin builds the Rust binary and ships it in a wheel
+# (like ruff or uv do), so `uv tool install term2gif-rs` needs no Rust. The
+# name `term2gif` is taken on PyPI by an unrelated project.
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "term2gif-rs"
+description = "Record a terminal session and save it as a GIF, in a single binary"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "fonts/DejaVu-LICENSE.txt"]
+keywords = ["terminal", "gif", "recorder", "asciicast", "asciinema"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Rust",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Terminals",
+]
+# Taken from Cargo.toml, which bump-my-version updates.
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/sbellon/term2gif"
+Changelog = "https://github.com/sbellon/term2gif/blob/main/CHANGELOG.md"
+
+[tool.maturin]
+bindings = "bin"
