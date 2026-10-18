@@ -102,15 +102,53 @@ Rendering and timing:
   contains the same binary): `uv tool install term2gif-rs`, or without
   installing: `uvx --from term2gif-rs term2gif demo.gif`.
 - **With cargo**: `cargo binstall term2gif` (downloads the prebuilt binary) or
-  `cargo install term2gif` (builds it, needs Rust 1.86 or newer).
+  `cargo install --locked term2gif` (builds it, needs Rust 1.86 or newer).
 
 Windows needs Windows 10 version 1809 or newer (ConPTY).
 
 ## Build
 
-```sh
-cargo build --release      # needs Rust 1.86 or newer; binary: target/release/term2gif
-cargo install --path .
+With Rust 1.86 or newer, straight from GitHub:
+
+```
+cargo install --locked --git https://github.com/sbellon/term2gif
+```
+
+or from a local checkout:
+
+```
+cargo install --locked --path .
+```
+
+Either installs `term2gif` into `~/.cargo/bin`. Or build it with
+`cargo build --release` and put `target/release/term2gif` (`term2gif.exe` on
+Windows) on your `PATH` yourself.
+
+## Checks
+
+The typical Rust flow must stay clean (clippy runs with the `pedantic`
+group enabled via `[lints.clippy]` in `Cargo.toml`):
+
+```
+cargo fmt --check
+cargo check --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-features
+cargo doc --no-deps --all-features
+```
+
+plus a clippy pass for the other platform's code via a cross target
+(`x86_64-pc-windows-msvc` from GNU/Linux, `x86_64-unknown-linux-musl` from
+Windows), e.g.:
+
+```
+cargo clippy --all-targets --all-features --target x86_64-pc-windows-msvc -- -D warnings
+```
+
+A pre-commit hook runs all of it automatically; enable it once per clone with:
+
+```
+git config core.hooksPath .githooks
 ```
 
 ## Limitations
