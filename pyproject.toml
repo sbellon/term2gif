@@ -9,6 +9,7 @@ build-backend = "maturin"
 name = "term2gif-rs"
 description = "Record a terminal session and save it as a GIF, in a single binary"
 readme = "README.md"
+authors = [{ name = "Stefan Bellon" }]
 license = "MIT"
 license-files = ["LICENSE", "fonts/DejaVu-LICENSE.txt"]
 keywords = ["terminal", "gif", "recorder", "asciicast", "asciinema"]

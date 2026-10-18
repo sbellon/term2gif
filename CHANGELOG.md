@@ -1,5 +1,11 @@
 # ChangeLog
 
+## Unreleased
+
+### Fixed
+- builds with Rust 1.86, the minimum supported version that
+  `rust-version` declares (it needed 1.89 so far); CI now checks that
+
 ## 0.1.0 (2026-10-17)
 
 ### Added

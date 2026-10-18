@@ -235,12 +235,13 @@ fn distance(a: u32, b: u32) -> u32 {
 /// Returns the RGB palette, the pixel indices and the transparent index.
 fn quantize(pixels: &[u32]) -> (Vec<u8>, Vec<u8>, Option<u8>) {
     // Terminal frames consist of long runs of one color, so work per run
-    // instead of per pixel.
-    let runs = pixels.chunk_by(|a, b| a == b);
+    // instead of per pixel. A fresh iterator per pass, as `ChunkBy` is only
+    // `Clone` from Rust 1.89 on.
+    let runs = || pixels.chunk_by(|a, b| a == b);
 
     let mut counts: HashMap<u32, usize> = HashMap::new();
     let mut has_transparent = false;
-    for run in runs.clone() {
+    for run in runs() {
         if run[0] == TRANSPARENT {
             has_transparent = true;
         } else {
@@ -262,7 +263,7 @@ fn quantize(pixels: &[u32]) -> (Vec<u8>, Vec<u8>, Option<u8>) {
     let transparent = has_transparent.then_some(kept.len() as u8);
 
     let mut indices = Vec::with_capacity(pixels.len());
-    for run in runs {
+    for run in runs() {
         let p = run[0];
         let i = if p == TRANSPARENT {
             transparent.unwrap()
