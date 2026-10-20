@@ -1,6 +1,6 @@
 # ChangeLog
 
-## Unreleased
+## 0.1.1 (2026-10-20)
 
 ### Fixed
 - builds with Rust 1.86, the minimum supported version that
