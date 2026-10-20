@@ -1,5 +1,12 @@
 # ChangeLog
 
+## Unreleased
+
+### Added
+- a progress bar with the estimated time left while the GIF is rendered,
+  shown on a terminal when that takes longer than a second (not with
+  `--quiet`)
+
 ## 0.1.1 (2026-10-20)
 
 ### Fixed

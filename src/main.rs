@@ -13,6 +13,7 @@ mod convert;
 mod encode;
 mod font;
 mod pcf;
+mod progress;
 mod recorder;
 mod render;
 mod theme;
@@ -353,6 +354,7 @@ fn run() -> Result<()> {
         &timing,
         !cli.no_loop,
         BufWriter::new(output),
+        &mut progress::Progress::new(!cli.quiet),
     )
     .and_then(|(mut out, summary)| {
         out.flush().context("cannot write the GIF")?;

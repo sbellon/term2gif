@@ -84,6 +84,8 @@ Recording, then rendering; `--from-cast` skips the recording.
   font of the xterm term2gif runs in.
 - `src/encode.rs` — GIF output (`gif` crate): changed-rectangle frames,
   unchanged pixels transparent, per-frame palette.
+- `src/progress.rs` — progress bar on stderr while rendering, only on a
+  terminal and after a second.
 
 ## Invariants
 
