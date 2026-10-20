@@ -1,6 +1,6 @@
 # ChangeLog
 
-## Unreleased
+## 0.1.2 (2026-10-20)
 
 ### Added
 - a progress bar with the estimated time left while the GIF is rendered,
