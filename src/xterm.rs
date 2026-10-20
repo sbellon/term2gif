@@ -24,8 +24,53 @@ const DEFAULT_FACE_SIZE: f32 = 8.0;
 pub enum XtermFont {
     /// An X11 core font name (alias, XLFD or pattern).
     Bitmap(String),
-    /// A FreeType font (`faceName`): families and pixel size.
-    Vector { families: Vec<String>, size: f32 },
+    /// A FreeType font (`faceName`): families, pixel size and fontconfig
+    /// style (e.g. `Bold SemiCondensed`).
+    Vector {
+        families: Vec<String>,
+        size: f32,
+        style: Option<String>,
+    },
+}
+
+impl XtermFont {
+    /// XLFD patterns for a `Vector` font that is an X11 bitmap font found
+    /// through fontconfig, such as `Misc Fixed:style=SemiCondensed:pixelsize=13`
+    /// (fontconfig prefixes their family with the foundry).
+    pub fn bitmap_patterns(&self) -> Vec<String> {
+        let XtermFont::Vector {
+            families,
+            size,
+            style,
+        } = self
+        else {
+            return Vec::new();
+        };
+        let (mut weight, mut slant, mut width) = ("medium", "r", "normal".to_owned());
+        for word in style.as_deref().unwrap_or("").split_whitespace() {
+            match word.to_ascii_lowercase().as_str() {
+                "bold" => weight = "bold",
+                "italic" => slant = "i",
+                "oblique" => slant = "o",
+                "regular" | "medium" | "normal" | "roman" => {}
+                other => other.clone_into(&mut width),
+            }
+        }
+        let mut patterns = Vec::new();
+        for family in families {
+            let family = family.to_ascii_lowercase();
+            let mut names = vec![("*", family.as_str())];
+            if let Some((foundry, rest)) = family.split_once(' ') {
+                names.insert(0, (foundry, rest));
+            }
+            for (foundry, name) in names {
+                patterns.push(format!(
+                    "-{foundry}-{name}-{weight}-{slant}-{width}--{size}-*"
+                ));
+            }
+        }
+        patterns
+    }
 }
 
 pub struct Detection {
@@ -77,6 +122,7 @@ fn parse_face(face: &str, points: f32, dpi: f32) -> XtermFont {
     let mut parts = face.split(':');
     let mut family = parts.next().unwrap_or("").trim().to_owned();
     let mut size = points * dpi / 72.0;
+    let mut style = None;
 
     // `Family-12`: a point size after the last dash.
     if let Some((name, pt)) = family.rsplit_once('-') {
@@ -90,6 +136,25 @@ fn parse_face(face: &str, points: f32, dpi: f32) -> XtermFont {
             match (key.trim(), value.trim().parse::<f32>()) {
                 ("size", Ok(pt)) => size = pt * dpi / 72.0,
                 ("pixelsize", Ok(px)) => size = px,
+                ("style", _) => style = Some(value.trim().to_owned()),
+                // fontconfig's numeric widths, as words for the XLFD.
+                ("width", Ok(w)) => {
+                    const WIDTHS: [(f32, &str); 8] = [
+                        (57.0, "UltraCondensed"),
+                        (69.0, "ExtraCondensed"),
+                        (81.0, "Condensed"),
+                        (94.0, "SemiCondensed"),
+                        (107.0, "Normal"),
+                        (119.0, "SemiExpanded"),
+                        (137.0, "Expanded"),
+                        (175.0, "ExtraExpanded"),
+                    ];
+                    let width = WIDTHS
+                        .iter()
+                        .find(|(limit, _)| w < *limit)
+                        .map_or("UltraExpanded", |(_, name)| name);
+                    style = Some(format!("{} {width}", style.unwrap_or_default()));
+                }
                 _ => {}
             }
         }
@@ -103,7 +168,14 @@ fn parse_face(face: &str, points: f32, dpi: f32) -> XtermFont {
     XtermFont::Vector {
         families,
         size: size.round().max(4.0),
+        style,
     }
+}
+
+/// Whether an OSC 50 reply is a fontconfig pattern (`Family:key=value`)
+/// rather than an X11 core font name or a file path.
+fn is_face(name: &str) -> bool {
+    name.contains(':') && !name.starts_with('-') && !name.contains('/')
 }
 
 /// Settings from xterm's command line arguments; also returns the class
@@ -333,8 +405,10 @@ pub fn detect() -> Option<Detection> {
     let dpi = dpi.unwrap_or(DEFAULT_DPI);
 
     if let Some(name) = osc50 {
-        // xterm reports FreeType fonts with an "xft:" prefix.
-        let font = if name.starts_with("xft:") {
+        // xterm reports a FreeType font by its face name, with an "xft:"
+        // prefix only if the face name has one; X11 core font names have
+        // no `:`.
+        let font = if name.starts_with("xft:") || is_face(&name) {
             let size = args
                 .face_size
                 .or(resources.face_size)
@@ -404,7 +478,8 @@ mod tests {
             s.resolve(96.0),
             XtermFont::Vector {
                 families: vec!["DejaVu Sans Mono".to_owned()],
-                size: 16.0
+                size: 16.0,
+                style: None,
             }
         );
         let (s, _) = parse_resources(&format!("{text}XTerm*renderFont:\tfalse\n"), "XTerm");
@@ -432,7 +507,8 @@ mod tests {
             s.resolve(96.0),
             XtermFont::Vector {
                 families: vec!["Mono".to_owned()],
-                size: 13.0
+                size: 13.0,
+                style: None,
             }
         );
     }
@@ -442,6 +518,7 @@ mod tests {
         let v = |families: &[&str], size| XtermFont::Vector {
             families: families.iter().map(ToString::to_string).collect(),
             size,
+            style: None,
         };
         assert_eq!(
             parse_face("xft:DejaVu Sans Mono-12", 8.0, 96.0),
@@ -452,6 +529,29 @@ mod tests {
             v(&["Mono"], 15.0)
         );
         assert_eq!(parse_face("A,B", 9.0, 96.0), v(&["A", "B"], 12.0));
+    }
+
+    #[test]
+    fn bitmap_faces() {
+        let name = "Misc Fixed:style=SemiCondensed:pixelsize=13";
+        assert!(is_face(name));
+        assert!(!is_face("-misc-fixed-medium-r-semicondensed--13-*"));
+        assert!(!is_face("9x15"));
+        let font = parse_face(name, 8.0, 96.0);
+        assert_eq!(
+            font.bitmap_patterns(),
+            [
+                "-misc-fixed-medium-r-semicondensed--13-*",
+                "-*-misc fixed-medium-r-semicondensed--13-*",
+            ]
+        );
+        let font = parse_face("Misc Fixed:width=87:pixelsize=13", 8.0, 96.0);
+        assert_eq!(
+            font.bitmap_patterns()[0],
+            "-misc-fixed-medium-r-semicondensed--13-*"
+        );
+        let font = parse_face("Fixed:style=Bold Oblique:pixelsize=13", 8.0, 96.0);
+        assert_eq!(font.bitmap_patterns(), ["-*-fixed-bold-o-normal--13-*"]);
     }
 
     #[test]

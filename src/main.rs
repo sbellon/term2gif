@@ -283,7 +283,7 @@ fn choose_fonts(cli: &Cli) -> Result<font::Fonts> {
             }
         },
         // xterm's cell height is the font's own height, no extra spacing.
-        xterm::XtermFont::Vector { families, size } => {
+        xterm::XtermFont::Vector { families, size, .. } => {
             let what = format!("`{}` at {size} px", families.join(", "));
             let size = size * scale;
             match font::Fonts::new(families, size, None, None) {
@@ -292,8 +292,19 @@ fn choose_fonts(cli: &Cli) -> Result<font::Fonts> {
                     Ok(fonts)
                 }
                 Err(e) => {
-                    warn(&what, e);
-                    font::Fonts::new(&[], size, None, None)
+                    // fontconfig also offers X11 bitmap fonts, which only
+                    // the bitmap font loader reads.
+                    let bitmap = detection
+                        .font
+                        .bitmap_patterns()
+                        .iter()
+                        .find_map(|p| load_bitmap_font(p).ok());
+                    if bitmap.is_some() {
+                        note(&what);
+                    } else {
+                        warn(&what, e);
+                    }
+                    font::Fonts::new(&[], size, line_height, bitmap)
                 }
             }
         }
