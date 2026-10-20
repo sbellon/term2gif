@@ -12,6 +12,7 @@ use avt::Vt;
 
 use crate::cast::{Event, Recording};
 use crate::encode::GifWriter;
+use crate::progress::Progress;
 use crate::render::{Canvas, Renderer};
 
 pub struct Timing {
@@ -59,6 +60,7 @@ pub fn to_gif<W: Write>(
     timing: &Timing,
     repeat: bool,
     out: W,
+    progress: &mut Progress,
 ) -> Result<(W, Summary)> {
     let (max_cols, max_rows) = rec.max_size();
     let (width, height) = renderer.canvas_size(max_cols, max_rows);
@@ -78,7 +80,9 @@ pub fn to_gif<W: Write>(
     // Events closer together than the frame interval go into one frame,
     // shown from the time of the first of them.
     let mut frame_start: Option<f64> = None;
-    for ((_, event), &t) in rec.events.iter().zip(&times) {
+    let total = rec.events.len();
+    for (i, ((_, event), &t)) in rec.events.iter().zip(&times).enumerate() {
+        progress.update(i, total);
         if let Some(start) = frame_start {
             if t >= start + interval {
                 renderer.render(&vt, &mut canvas);
@@ -103,6 +107,7 @@ pub fn to_gif<W: Write>(
     }
 
     let (out, frames) = gif.finish(centiseconds(timing.last_frame_duration))?;
+    progress.finish();
     Ok((
         out,
         Summary {
