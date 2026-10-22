@@ -5,7 +5,9 @@
 //! Turning a recording into a GIF: replaying it through a virtual terminal
 //! and rendering frames at the (adjusted) event times.
 
+use std::fmt;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
 use avt::Vt;
@@ -46,6 +48,18 @@ fn centiseconds(t: f64) -> u32 {
     (t * 100.0).round().clamp(0.0, f64::from(u32::MAX)) as u32
 }
 
+/// The error of a rendering stopped because `interrupted` was set.
+#[derive(Debug)]
+pub struct Interrupted;
+
+impl fmt::Display for Interrupted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("interrupted")
+    }
+}
+
+impl std::error::Error for Interrupted {}
+
 pub struct Summary {
     pub width: u32,
     pub height: u32,
@@ -54,6 +68,7 @@ pub struct Summary {
 
 /// Renders `rec` as a GIF. A terminal that changes size is drawn at the top
 /// left of a canvas as large as the largest size during the recording.
+/// Setting `interrupted` stops it with an [`Interrupted`] error.
 pub fn to_gif<W: Write>(
     rec: &Recording,
     renderer: &mut Renderer,
@@ -61,6 +76,7 @@ pub fn to_gif<W: Write>(
     repeat: bool,
     out: W,
     progress: &mut Progress,
+    interrupted: &AtomicBool,
 ) -> Result<(W, Summary)> {
     let (max_cols, max_rows) = rec.max_size();
     let (width, height) = renderer.canvas_size(max_cols, max_rows);
@@ -82,6 +98,9 @@ pub fn to_gif<W: Write>(
     let mut frame_start: Option<f64> = None;
     let total = rec.events.len();
     for (i, ((_, event), &t)) in rec.events.iter().zip(&times).enumerate() {
+        if interrupted.load(Ordering::Relaxed) {
+            return Err(Interrupted.into());
+        }
         progress.update(i, total);
         if let Some(start) = frame_start {
             if t >= start + interval {

@@ -1,5 +1,13 @@
 # ChangeLog
 
+## Unreleased
+
+### Fixed
+- Ctrl-C while the GIF is rendered stops cleanly: the incomplete GIF is
+  removed and the progress bar is cleared before term2gif ends as
+  interrupted by Ctrl-C, so a calling shell script stops too (a second
+  Ctrl-C exits at once)
+
 ## 0.1.2 (2026-10-20)
 
 ### Added

@@ -25,6 +25,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -346,6 +347,16 @@ fn run() -> Result<()> {
         last_frame_duration: cli.last_frame_duration,
     };
 
+    // Ctrl-C now stops the rendering, which removes the incomplete GIF below;
+    // a second Ctrl-C exits right away. Not while recording: there Ctrl-C
+    // belongs to the recorded program. Without the handler, Ctrl-C simply
+    // ends the program, so a failure to install it is no reason to stop.
+    let _ = ctrlc::set_handler(|| {
+        if INTERRUPTED.swap(true, Ordering::Relaxed) {
+            exit_interrupted();
+        }
+    });
+
     let output = File::create(&cli.output)
         .with_context(|| format!("cannot create {}", cli.output.display()))?;
     let result = convert::to_gif(
@@ -355,6 +366,7 @@ fn run() -> Result<()> {
         !cli.no_loop,
         BufWriter::new(output),
         &mut progress::Progress::new(!cli.quiet),
+        &INTERRUPTED,
     )
     .and_then(|(mut out, summary)| {
         out.flush().context("cannot write the GIF")?;
@@ -382,9 +394,34 @@ fn run() -> Result<()> {
     }
 }
 
+/// Set by Ctrl-C while rendering.
+static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+/// Ends the program the way Ctrl-C does without a handler, so that the
+/// caller sees the interruption (a shell, e.g., then also stops a loop or
+/// script that runs term2gif).
+fn exit_interrupted() -> ! {
+    #[cfg(unix)]
+    // SAFETY: restoring the default action of a signal and raising it have
+    // no preconditions; this ends the process.
+    unsafe {
+        libc::signal(libc::SIGINT, libc::SIG_DFL);
+        libc::raise(libc::SIGINT);
+    }
+    #[cfg(windows)]
+    std::process::exit(windows_sys::Win32::Foundation::STATUS_CONTROL_C_EXIT);
+    // Only if raising the signal failed: the status shells report for it.
+    #[allow(unreachable_code)]
+    std::process::exit(130)
+}
+
 fn main() -> ExitCode {
     match run() {
         Ok(()) => ExitCode::SUCCESS,
+        Err(e) if e.is::<convert::Interrupted>() => {
+            eprintln!("term2gif: {e:#}");
+            exit_interrupted()
+        }
         Err(e) => {
             eprintln!("term2gif: {e:#}");
             ExitCode::FAILURE
