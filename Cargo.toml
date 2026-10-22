@@ -18,6 +18,8 @@ clap = { version = "4", features = ["derive"] }
 # Cross-platform PTY (Unix openpty, Windows ConPTY) and terminal handling.
 portable-pty = "0.9"
 crossterm = "0.29"
+# Ctrl-C while rendering stops cleanly (Unix SIGINT, Windows console Ctrl-C).
+ctrlc = "3.5"
 serde_json = "1"
 tempfile = "3"
 # Rendering: virtual terminal, font discovery, glyph rasterization, GIF encoding.
