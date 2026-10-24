@@ -1,6 +1,6 @@
 # ChangeLog
 
-## Unreleased
+## 0.1.3 (2026-10-24)
 
 ### Fixed
 - Ctrl-C while the GIF is rendered stops cleanly: the incomplete GIF is
