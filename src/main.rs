@@ -5,7 +5,8 @@
 //! term2gif: record a terminal session and save it as a GIF, in a single binary.
 //!
 //! Recording is done by a built-in PTY recorder (asciicast v2); the recording
-//! is then replayed through a virtual terminal (avt) and rendered to a GIF.
+//! is replayed through a virtual terminal (avt) and rendered to a GIF while
+//! it is going on.
 
 mod boxdraw;
 mod cast;
@@ -23,14 +24,20 @@ mod xterm;
 
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
+use std::time::Instant;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use tempfile::NamedTempFile;
 
+use crate::cast::Event;
+use crate::convert::{Converter, Summary, Timing};
+use crate::render::Renderer;
 use crate::theme::Theme;
 
 const THEME_HELP: &str = "Color theme: asciinema, dracula, monokai, nord, solarized-dark, \
@@ -190,7 +197,24 @@ impl Cli {
     }
 }
 
-fn record(cli: &Cli) -> Result<cast::Recording> {
+/// What became of rendering a recording while it was going on.
+enum Live {
+    /// The recording did not start.
+    NotStarted,
+    /// The terminal grew beyond its size at the start, which the GIF cannot
+    /// follow: the recording has to be rendered once more when it is done.
+    Outgrown,
+    Done(Summary),
+}
+
+/// Records a session and renders it to the GIF at the same time. The outer
+/// error is a recording that did not start, which leaves the output alone;
+/// with the inner one, the output is to be removed.
+fn record_and_render(
+    cli: &Cli,
+    renderer: &mut Renderer,
+    timing: &Timing,
+) -> Result<Result<Summary>> {
     // The temporary cast file is removed when `cast` is dropped, on every path.
     let cast = NamedTempFile::with_prefix("term2gif-").context("cannot create a temporary file")?;
 
@@ -207,23 +231,153 @@ fn record(cli: &Cli) -> Result<cast::Recording> {
         }
     }
 
-    recorder::record(
-        cast.path(),
-        &recorder::Options {
-            command: cli.command.clone(),
-            title: cli.title.clone(),
-        },
-    )?;
+    let (sender, events) = mpsc::channel();
+    let opts = recorder::Options {
+        command: cli.command.clone(),
+        title: cli.title.clone(),
+        live: Some(sender),
+    };
+    let start = Instant::now();
+    // The recorder runs on its own thread; the renderer stays on this one.
+    // `opts` moves along, so that the events end with the recording.
+    let cast_path = cast.path();
+    let (recorded, live) = thread::scope(|s| {
+        let recording = s.spawn(move || recorder::record(cast_path, &opts));
+        let live = render_live(cli, renderer, timing, events, start, || {
+            recording.is_finished()
+        });
+        let recorded = recording
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        (recorded, live)
+    });
+
+    if let Err(e) = recorded {
+        return match live {
+            Ok(Live::NotStarted) => Err(e),
+            _ => Ok(Err(e)),
+        };
+    }
 
     if let Some(path) = &cli.keep_cast {
         // Not fs::copy: that would also copy the temporary file's 0600 mode.
-        File::create(path)
+        let saved = File::create(path)
             .and_then(|mut f| std::io::copy(&mut File::open(cast.path())?, &mut f))
-            .with_context(|| format!("cannot save the recording to {}", path.display()))?;
+            .with_context(|| format!("cannot save the recording to {}", path.display()));
+        if let Err(e) = saved {
+            return Ok(Err(e));
+        }
     }
 
-    let file = File::open(cast.path()).context("cannot read the recording")?;
-    cast::read(BufReader::new(file))
+    Ok(match live {
+        Ok(Live::Done(summary)) => Ok(summary),
+        Ok(live) => {
+            if cli.verbose && matches!(live, Live::Outgrown) {
+                eprintln!("term2gif: the terminal grew, rendering the recording once more");
+            }
+            read_cast(cast.path()).and_then(|rec| render(cli, &rec, renderer, timing))
+        }
+        Err(e) => Err(e),
+    })
+}
+
+/// Renders the `events` of a recording that started at `start` while it is
+/// going on, on a canvas of the terminal's size at the start. Once
+/// `finished` says that the recording is done, the remaining events are
+/// rendered with a progress bar and Ctrl-C handling, as after a recording.
+fn render_live(
+    cli: &Cli,
+    renderer: &mut Renderer,
+    timing: &Timing,
+    events: Receiver<(f64, Event)>,
+    start: Instant,
+    finished: impl Fn() -> bool,
+) -> Result<Live> {
+    let Ok((_, Event::Resize(cols, rows))) = events.recv() else {
+        return Ok(Live::NotStarted);
+    };
+    let output = File::create(&cli.output)
+        .with_context(|| format!("cannot create {}", cli.output.display()))?;
+    let mut conv = Converter::new(
+        renderer,
+        timing,
+        (cols, rows),
+        (cols, rows),
+        !cli.no_loop,
+        BufWriter::new(output),
+    )?;
+
+    // Once the recording is done: the progress bar, and the recording times
+    // it goes from and to.
+    let mut rest: Option<(progress::Progress, f64, f64)> = None;
+    for (t, event) in events {
+        if let Event::Resize(cols, rows) = event {
+            if !conv.fits(cols, rows) {
+                return Ok(Live::Outgrown);
+            }
+        }
+        if rest.is_none() && finished() {
+            set_ctrlc_handler();
+            let end = start.elapsed().as_secs_f64();
+            rest = Some((progress::Progress::new(!cli.quiet), t, end));
+        }
+        if let Some((progress, from, to)) = &mut rest {
+            if INTERRUPTED.load(Ordering::Relaxed) {
+                return Err(convert::Interrupted.into());
+            }
+            progress.update(millis(t - *from), millis(*to - *from));
+        }
+        conv.event(t, &event)?;
+    }
+
+    let (mut out, summary) = conv.finish()?;
+    out.flush().context("cannot write the GIF")?;
+    Ok(Live::Done(summary))
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // progress steps
+fn millis(secs: f64) -> usize {
+    (secs * 1000.0).max(0.0) as usize
+}
+
+fn read_cast(path: &Path) -> Result<cast::Recording> {
+    let file = File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
+    cast::read(BufReader::new(file)).with_context(|| format!("cannot read {}", path.display()))
+}
+
+/// Renders a whole recording to the GIF.
+fn render(
+    cli: &Cli,
+    rec: &cast::Recording,
+    renderer: &mut Renderer,
+    timing: &Timing,
+) -> Result<Summary> {
+    set_ctrlc_handler();
+    let output = File::create(&cli.output)
+        .with_context(|| format!("cannot create {}", cli.output.display()))?;
+    let (mut out, summary) = convert::to_gif(
+        rec,
+        renderer,
+        timing,
+        !cli.no_loop,
+        BufWriter::new(output),
+        &mut progress::Progress::new(!cli.quiet),
+        &INTERRUPTED,
+    )?;
+    out.flush().context("cannot write the GIF")?;
+    Ok(summary)
+}
+
+/// From now on, Ctrl-C stops the rendering, which removes the incomplete
+/// GIF; a second Ctrl-C exits right away. Not while recording: there Ctrl-C
+/// belongs to the recorded program. Without the handler, Ctrl-C simply ends
+/// the program, so a failure to install it is no reason to stop.
+fn set_ctrlc_handler() {
+    let _ = ctrlc::set_handler(|| {
+        if INTERRUPTED.swap(true, Ordering::Relaxed) {
+            exit_interrupted();
+        }
+    });
 }
 
 fn load_bitmap_font(name: &str) -> Result<font::BitmapFonts> {
@@ -328,50 +482,22 @@ fn run() -> Result<()> {
     } else {
         1
     };
-    let mut renderer = render::Renderer::new(fonts, theme, cli.bold_is_bright, pixel_scale);
+    let mut renderer = Renderer::new(fonts, theme, cli.bold_is_bright, pixel_scale);
 
-    let recording = match &cli.from_cast {
-        Some(path) => {
-            let file =
-                File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
-            cast::read(BufReader::new(file))
-                .with_context(|| format!("cannot read {}", path.display()))?
-        }
-        None => record(&cli)?,
-    };
-
-    let timing = convert::Timing {
+    let timing = Timing {
         speed: cli.speed,
         idle_time_limit: (cli.idle_time_limit > 0.0).then_some(cli.idle_time_limit),
         fps_cap: cli.fps_cap,
         last_frame_duration: cli.last_frame_duration,
     };
 
-    // Ctrl-C now stops the rendering, which removes the incomplete GIF below;
-    // a second Ctrl-C exits right away. Not while recording: there Ctrl-C
-    // belongs to the recorded program. Without the handler, Ctrl-C simply
-    // ends the program, so a failure to install it is no reason to stop.
-    let _ = ctrlc::set_handler(|| {
-        if INTERRUPTED.swap(true, Ordering::Relaxed) {
-            exit_interrupted();
+    let result = match &cli.from_cast {
+        Some(path) => {
+            let rec = read_cast(path)?;
+            render(&cli, &rec, &mut renderer, &timing)
         }
-    });
-
-    let output = File::create(&cli.output)
-        .with_context(|| format!("cannot create {}", cli.output.display()))?;
-    let result = convert::to_gif(
-        &recording,
-        &mut renderer,
-        &timing,
-        !cli.no_loop,
-        BufWriter::new(output),
-        &mut progress::Progress::new(!cli.quiet),
-        &INTERRUPTED,
-    )
-    .and_then(|(mut out, summary)| {
-        out.flush().context("cannot write the GIF")?;
-        Ok(summary)
-    });
+        None => record_and_render(&cli, &mut renderer, &timing)?,
+    };
 
     match result {
         Ok(summary) => {

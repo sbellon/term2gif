@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+- the GIF is rendered while the session is recorded, so it is usually
+  written right after the session ends instead of only then being rendered
+  (if the terminal grows beyond its size at the start, the recording is
+  still rendered afterwards); the progress bar shows what is left after the
+  session
+- the output file is created when the recording starts
+
 ## 0.1.3 (2026-10-24)
 
 ### Fixed
