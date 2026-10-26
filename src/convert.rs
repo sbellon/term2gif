@@ -25,22 +25,30 @@ pub struct Timing {
     pub last_frame_duration: f64,
 }
 
-/// Maps recording times to GIF times: idle time limit, then speed.
-fn adjusted_times(rec: &Recording, timing: &Timing) -> Vec<f64> {
-    let mut prev = 0.0;
-    let mut acc = 0.0;
-    rec.events
-        .iter()
-        .map(|(t, _)| {
-            let mut delta = (t - prev).max(0.0);
-            if let Some(limit) = timing.idle_time_limit {
-                delta = delta.min(limit);
-            }
-            prev = *t;
-            acc += delta;
-            acc / timing.speed
-        })
-        .collect()
+/// Maps recording times to GIF times: idle time limit, then speed. Each
+/// time depends only on the earlier ones, so this works during a recording.
+struct Clock {
+    prev: f64,
+    acc: f64,
+}
+
+impl Clock {
+    fn new() -> Self {
+        Clock {
+            prev: 0.0,
+            acc: 0.0,
+        }
+    }
+
+    fn adjust(&mut self, t: f64, timing: &Timing) -> f64 {
+        let mut delta = (t - self.prev).max(0.0);
+        if let Some(limit) = timing.idle_time_limit {
+            delta = delta.min(limit);
+        }
+        self.prev = t;
+        self.acc += delta;
+        self.acc / timing.speed
+    }
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // clamped to u32
@@ -66,9 +74,115 @@ pub struct Summary {
     pub frames: usize,
 }
 
-/// Renders `rec` as a GIF. A terminal that changes size is drawn at the top
-/// left of a canvas as large as the largest size during the recording.
-/// Setting `interrupted` stops it with an [`Interrupted`] error.
+/// Turns events into GIF frames as they come, so a recording can be
+/// rendered while it is still going on.
+pub struct Converter<'a, W: Write> {
+    renderer: &'a mut Renderer,
+    timing: &'a Timing,
+    gif: GifWriter<W>,
+    canvas: Canvas,
+    vt: Vt,
+    clock: Clock,
+    /// Start of the frame that collects the latest events.
+    frame_start: Option<f64>,
+    /// The largest terminal size that fits on the canvas.
+    max_size: (usize, usize),
+    width: u32,
+    height: u32,
+}
+
+impl<'a, W: Write> Converter<'a, W> {
+    /// Starts a GIF of a terminal of `size` (columns, rows), on a canvas for
+    /// a terminal of `max_size`. A terminal that changes size is drawn at the
+    /// top left of the canvas.
+    pub fn new(
+        renderer: &'a mut Renderer,
+        timing: &'a Timing,
+        size: (usize, usize),
+        max_size: (usize, usize),
+        repeat: bool,
+        out: W,
+    ) -> Result<Self> {
+        let max_size = (max_size.0.max(size.0), max_size.1.max(size.1));
+        let (width, height) = renderer.canvas_size(max_size.0, max_size.1);
+        let mut gif = GifWriter::new(out, width, height, repeat)?;
+        let mut canvas = Canvas::new(width, height);
+        let vt = Vt::builder()
+            .size(size.0, size.1)
+            .scrollback_limit(0)
+            .build();
+        renderer.render(&vt, &mut canvas);
+        gif.push(&canvas, 0)?;
+        Ok(Converter {
+            renderer,
+            timing,
+            gif,
+            canvas,
+            vt,
+            clock: Clock::new(),
+            frame_start: None,
+            max_size,
+            width,
+            height,
+        })
+    }
+
+    /// Whether a terminal of `cols` x `rows` fits on the canvas.
+    pub fn fits(&self, cols: usize, rows: usize) -> bool {
+        cols <= self.max_size.0 && rows <= self.max_size.1
+    }
+
+    /// Adds an event at recording time `t` (seconds, not decreasing). A
+    /// resize must [fit](Self::fits).
+    pub fn event(&mut self, t: f64, event: &Event) -> Result<()> {
+        let t = self.clock.adjust(t, self.timing);
+        let interval = 1.0 / f64::from(self.timing.fps_cap);
+        // Events closer together than the frame interval go into one frame,
+        // shown from the time of the first of them.
+        if let Some(start) = self.frame_start {
+            if t >= start + interval {
+                self.renderer.render(&self.vt, &mut self.canvas);
+                self.gif.push(&self.canvas, centiseconds(start))?;
+                self.frame_start = None;
+            }
+        }
+        self.frame_start.get_or_insert(t);
+
+        match event {
+            Event::Output(data) => {
+                self.vt.feed_str(data);
+            }
+            Event::Resize(cols, rows) => {
+                debug_assert!(self.fits(*cols, *rows));
+                self.vt.resize(*cols, *rows);
+            }
+        }
+        Ok(())
+    }
+
+    /// Writes the last frame and returns the output.
+    pub fn finish(mut self) -> Result<(W, Summary)> {
+        if let Some(start) = self.frame_start {
+            self.renderer.render(&self.vt, &mut self.canvas);
+            self.gif.push(&self.canvas, centiseconds(start))?;
+        }
+        let (out, frames) = self
+            .gif
+            .finish(centiseconds(self.timing.last_frame_duration))?;
+        Ok((
+            out,
+            Summary {
+                width: self.width,
+                height: self.height,
+                frames,
+            },
+        ))
+    }
+}
+
+/// Renders `rec` as a GIF, on a canvas as large as the largest terminal size
+/// during the recording. Setting `interrupted` stops it with an
+/// [`Interrupted`] error.
 pub fn to_gif<W: Write>(
     rec: &Recording,
     renderer: &mut Renderer,
@@ -78,79 +192,30 @@ pub fn to_gif<W: Write>(
     progress: &mut Progress,
     interrupted: &AtomicBool,
 ) -> Result<(W, Summary)> {
-    let (max_cols, max_rows) = rec.max_size();
-    let (width, height) = renderer.canvas_size(max_cols, max_rows);
-    let mut gif = GifWriter::new(out, width, height, repeat)?;
-    let mut canvas = Canvas::new(width, height);
-
-    let mut vt = Vt::builder()
-        .size(rec.cols, rec.rows)
-        .scrollback_limit(0)
-        .build();
-    let times = adjusted_times(rec, timing);
-    let interval = 1.0 / f64::from(timing.fps_cap);
-
-    renderer.render(&vt, &mut canvas);
-    gif.push(&canvas, 0)?;
-
-    // Events closer together than the frame interval go into one frame,
-    // shown from the time of the first of them.
-    let mut frame_start: Option<f64> = None;
+    let mut conv = Converter::new(
+        renderer,
+        timing,
+        (rec.cols, rec.rows),
+        rec.max_size(),
+        repeat,
+        out,
+    )?;
     let total = rec.events.len();
-    for (i, ((_, event), &t)) in rec.events.iter().zip(&times).enumerate() {
+    for (i, (t, event)) in rec.events.iter().enumerate() {
         if interrupted.load(Ordering::Relaxed) {
             return Err(Interrupted.into());
         }
         progress.update(i, total);
-        if let Some(start) = frame_start {
-            if t >= start + interval {
-                renderer.render(&vt, &mut canvas);
-                gif.push(&canvas, centiseconds(start))?;
-                frame_start = None;
-            }
-        }
-        frame_start.get_or_insert(t);
-
-        match event {
-            Event::Output(data) => {
-                vt.feed_str(data);
-            }
-            Event::Resize(cols, rows) => {
-                vt.resize(*cols, *rows);
-            }
-        }
+        conv.event(*t, event)?;
     }
-    if let Some(start) = frame_start {
-        renderer.render(&vt, &mut canvas);
-        gif.push(&canvas, centiseconds(start))?;
-    }
-
-    let (out, frames) = gif.finish(centiseconds(timing.last_frame_duration))?;
+    let result = conv.finish()?;
     progress.finish();
-    Ok((
-        out,
-        Summary {
-            width,
-            height,
-            frames,
-        },
-    ))
+    Ok(result)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn rec(times: &[f64]) -> Recording {
-        Recording {
-            cols: 80,
-            rows: 24,
-            events: times
-                .iter()
-                .map(|&t| (t, Event::Output(String::new())))
-                .collect(),
-        }
-    }
 
     #[test]
     fn idle_limit_and_speed() {
@@ -160,7 +225,11 @@ mod tests {
             fps_cap: 30,
             last_frame_duration: 1.0,
         };
-        let times = adjusted_times(&rec(&[0.5, 10.0, 10.5]), &timing);
+        let mut clock = Clock::new();
+        let times: Vec<f64> = [0.5, 10.0, 10.5]
+            .iter()
+            .map(|&t| clock.adjust(t, &timing))
+            .collect();
         assert_eq!(times, vec![0.25, 0.75, 1.0]);
     }
 }

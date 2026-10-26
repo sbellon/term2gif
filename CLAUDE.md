@@ -63,7 +63,12 @@ workflow by hand only builds.
 
 ## Architecture
 
-Recording, then rendering; `--from-cast` skips the recording.
+Recording and rendering run at the same time: the recorder (on its own
+thread) sends its events over a channel to `convert::Converter` on the main
+thread (`Renderer` is not `Send`). The GIF's size is the terminal's size at
+the start; if the terminal grows beyond it, the live GIF is dropped and the
+cast file is rendered once more afterwards. `--from-cast` skips the
+recording.
 
 - `src/main.rs` — command line, font selection (options, or xterm detection),
   and the overall flow.
@@ -71,8 +76,9 @@ Recording, then rendering; `--from-cast` skips the recording.
   PTY, Windows ConPTY), mirrors output to the terminal, writes asciicast v2.
   `src/utf8.rs` decodes PTY output that splits multi-byte characters.
 - `src/cast.rs` — reads asciicast v2 and v3.
-- `src/convert.rs` — replays events through `avt` (virtual terminal),
-  applies idle limit / speed / fps cap, and feeds frames to the encoder.
+- `src/convert.rs` — replays events through `avt` (virtual terminal), one at
+  a time, applies idle limit / speed / fps cap, and feeds frames to the
+  encoder.
 - `src/render.rs` — draws the terminal state into an RGB canvas (largest
   size of the session; `--scale` enlarges pixels for bitmap fonts).
 - `src/font.rs` — bundled DejaVu Sans Mono (`fonts/`), preferred system

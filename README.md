@@ -64,6 +64,9 @@ Rendering and timing:
   is drawn with the built-in DejaVu Sans Mono font
   ([`swash`](https://crates.io/crates/swash) for rasterizing). Box drawing and
   block characters are drawn directly, so lines connect at any line height.
+  The GIF is rendered while the recording is going on, so it is usually done
+  right after the session ends. Only if the terminal grows beyond its size at
+  the start, the recording is rendered once more when it is done.
 - **X11 bitmap fonts** (`--bitmap-font`): the classic xterm fonts in PCF
   format, found through the `fonts.dir` / `fonts.alias` files of the X11 font
   directories (on Debian: package `xfonts-base`). As in xterm (uxterm), the

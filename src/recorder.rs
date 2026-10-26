@@ -6,12 +6,14 @@
 //!
 //! A PTY (`portable-pty`: Unix openpty / Windows ConPTY) runs the shell or
 //! command. Everything it prints is mirrored to the real terminal and written
-//! to the cast file; keystrokes from the real terminal are forwarded to it.
+//! to the cast file (and, if asked, sent on as events for rendering during
+//! the recording); keystrokes from the real terminal are forwarded to it.
 
 use std::fs::File;
 use std::io::{self, BufWriter, IsTerminal, Read, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -21,6 +23,7 @@ use crossterm::terminal;
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use serde_json::json;
 
+use crate::cast::Event;
 use crate::utf8::decode_chunk;
 
 #[derive(Default)]
@@ -28,6 +31,9 @@ pub struct Options {
     /// Command to run instead of the default shell (`-c`).
     pub command: Option<String>,
     pub title: Option<String>,
+    /// Receives the terminal size as a resize at time 0, then the events as
+    /// they are recorded.
+    pub live: Option<Sender<(f64, Event)>>,
 }
 
 /// Restores the terminal's original mode when dropped.
@@ -99,25 +105,43 @@ mod winvt {
 
 /// asciicast v2 writer, shared between the output and resize threads.
 struct Cast {
-    out: Mutex<BufWriter<File>>,
+    out: Mutex<CastOut>,
     start: Instant,
 }
 
-impl Cast {
-    fn event(&self, code: &str, data: &str) {
-        let t = (self.start.elapsed().as_secs_f64() * 1e6).round() / 1e6;
-        let line = json!([t, code, data]);
+struct CastOut {
+    file: BufWriter<File>,
+    live: Option<Sender<(f64, Event)>>,
+}
 
-        if let Ok(mut out) = self.out.lock() {
-            let _ = writeln!(out, "{line}");
+impl Cast {
+    fn event(&self, event: Event) {
+        let Ok(mut out) = self.out.lock() else {
+            return;
+        };
+        // Taken under the lock, so that times never decrease.
+        let t = (self.start.elapsed().as_secs_f64() * 1e6).round() / 1e6;
+        let line = match &event {
+            Event::Output(data) => json!([t, "o", data]),
+            Event::Resize(cols, rows) => json!([t, "r", format!("{cols}x{rows}")]),
+        };
+        let _ = writeln!(out.file, "{line}");
+        // A receiver that stopped listening only ends the live rendering.
+        if let Some(live) = &out.live {
+            if live.send((t, event)).is_err() {
+                out.live = None;
+            }
         }
     }
 
     fn flush(&self) -> io::Result<()> {
-        self.out
+        let mut out = self
+            .out
             .lock()
-            .map_err(|_| io::Error::other("poisoned lock"))?
-            .flush()
+            .map_err(|_| io::Error::other("poisoned lock"))?;
+        // Ends the live events.
+        out.live = None;
+        out.file.flush()
     }
 }
 
@@ -196,7 +220,7 @@ fn pump_output(mut reader: Box<dyn Read + Send>, cast: &Cast) {
                 let _ = stdout.flush();
 
                 if !text.is_empty() {
-                    cast.event("o", &text);
+                    cast.event(Event::Output(text));
                 }
             }
             Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
@@ -280,8 +304,12 @@ pub fn record(cast_path: &Path, opts: &Options) -> Result<()> {
         .take_writer()
         .map_err(|e| anyhow::anyhow!("cannot write to the pseudo-terminal: {e}"))?;
 
+    let live = opts.live.clone().filter(|live| {
+        live.send((0.0, Event::Resize(cols.into(), rows.into())))
+            .is_ok()
+    });
     let cast = Arc::new(Cast {
-        out: Mutex::new(out),
+        out: Mutex::new(CastOut { file: out, live }),
         start: Instant::now(),
     });
     let master: Arc<Mutex<Option<Box<dyn MasterPty + Send>>>> = Arc::new(Mutex::new(Some(master)));
@@ -315,7 +343,7 @@ pub fn record(cast_path: &Path, opts: &Options) -> Result<()> {
                                 let _ = m.resize(pty_size(size.0, size.1));
                             }
                         }
-                        cast.event("r", &format!("{}x{}", size.0, size.1));
+                        cast.event(Event::Resize(size.0.into(), size.1.into()));
                     }
                 }
             }
