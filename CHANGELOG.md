@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.0 (2026-10-26)
+
 ### Changed
 - the GIF is rendered while the session is recorded, so it is usually
   written right after the session ends instead of only then being rendered
