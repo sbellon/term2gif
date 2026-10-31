@@ -10,6 +10,9 @@
   empty rows above (elsewhere the session starts at the top anyway, and the
   option has no effect)
 
+### Changed
+- updated external dependencies (avt)
+
 ## 0.2.0 (2026-10-26)
 
 ### Changed
