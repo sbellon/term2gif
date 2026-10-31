@@ -66,6 +66,12 @@ struct Cli {
     #[arg(long, value_name = "FILE", help_heading = "Recording")]
     keep_cast: Option<PathBuf>,
 
+    /// Windows only, no effect elsewhere: clear the terminal when the
+    /// recording starts, so that the session starts at the top of the GIF
+    /// (otherwise on the row the cursor is on)
+    #[arg(long, conflicts_with = "from_cast", help_heading = "Recording")]
+    clear_screen: bool,
+
     /// Do not record; render this existing asciicast (v2 or v3) file instead
     #[arg(
         long,
@@ -235,6 +241,8 @@ fn record_and_render(
     let opts = recorder::Options {
         command: cli.command.clone(),
         title: cli.title.clone(),
+        #[cfg(windows)]
+        clear_screen: cli.clear_screen,
         live: Some(sender),
     };
     let start = Instant::now();

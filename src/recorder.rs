@@ -31,6 +31,9 @@ pub struct Options {
     /// Command to run instead of the default shell (`-c`).
     pub command: Option<String>,
     pub title: Option<String>,
+    /// Clear the terminal first (`--clear-screen`).
+    #[cfg(windows)]
+    pub clear_screen: bool,
     /// Receives the terminal size as a resize at time 0, then the events as
     /// they are recorded.
     pub live: Option<Sender<(f64, Event)>>,
@@ -68,8 +71,9 @@ mod winvt {
 
     /// Must be called *after* raw mode is enabled: crossterm restores the saved
     /// original input mode itself, which also drops the VT input flag again.
-    pub fn enable() -> Guard {
-        unsafe {
+    /// Then clears the screen if asked to (see [`clear_screen`]).
+    pub fn enable(clear: bool) -> Guard {
+        let guard = unsafe {
             let hin = GetStdHandle(STD_INPUT_HANDLE);
             let mut mode = 0u32;
             if GetConsoleMode(hin, &raw mut mode) != 0 {
@@ -89,7 +93,25 @@ mod winvt {
                 out_handle: hout,
                 out_mode: saved,
             }
+        };
+        if clear {
+            clear_screen();
         }
+        guard
+    }
+
+    /// ConPTY asks for the cursor position at its start (the query waits in
+    /// the pipe until the output thread forwards it) and then draws at
+    /// absolute rows from there, while the cast is replayed from the top of an
+    /// empty screen. Starting at the top of a cleared screen makes both agree.
+    fn clear_screen() {
+        use crossterm::{cursor::MoveTo, execute, terminal};
+
+        let _ = execute!(
+            std::io::stdout(),
+            terminal::Clear(terminal::ClearType::All),
+            MoveTo(0, 0)
+        );
     }
 
     impl Drop for Guard {
@@ -319,7 +341,7 @@ pub fn record(cast_path: &Path, opts: &Options) -> Result<()> {
     // first, then raw mode.
     let raw = RawModeGuard::enable()?;
     #[cfg(windows)]
-    let vt = winvt::enable();
+    let vt = winvt::enable(opts.clear_screen);
 
     let output_thread = {
         let cast = Arc::clone(&cast);
