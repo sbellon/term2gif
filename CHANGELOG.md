@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.1 (2026-10-31)
+
 ### Added
 - `--clear-screen` clears the terminal when the recording starts, so that
   on Windows the session stays at the top of the GIF; otherwise, as soon as
@@ -9,6 +11,9 @@
   continue on the row the cursor was on when the recording started, leaving
   empty rows above (elsewhere the session starts at the top anyway, and the
   option has no effect)
+
+### Changed
+- updated external dependencies (avt)
 
 ## 0.2.0 (2026-10-26)
 
