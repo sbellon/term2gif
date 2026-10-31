@@ -101,8 +101,10 @@ mod winvt {
     }
 
     /// ConPTY asks for the cursor position at its start (the query waits in
-    /// the pipe until the output thread forwards it) and then draws at
-    /// absolute rows from there, while the cast is replayed from the top of an
+    /// the pipe until the output thread forwards it). Plain output follows
+    /// with line breaks, but whenever the cursor is positioned (e.g. by a
+    /// shell's prompt), ConPTY moves it to an absolute row counted from the
+    /// real terminal's top, while the cast is replayed from the top of an
     /// empty screen. Starting at the top of a cleared screen makes both agree.
     fn clear_screen() {
         use crossterm::{cursor::MoveTo, execute, terminal};

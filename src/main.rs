@@ -68,7 +68,8 @@ struct Cli {
 
     /// Windows only, no effect elsewhere: clear the terminal when the
     /// recording starts, so that the session starts at the top of the GIF
-    /// (otherwise on the row the cursor is on)
+    /// (otherwise, e.g. with an interactive shell, it may continue further
+    /// down, on the row the cursor was on)
     #[arg(long, conflicts_with = "from_cast", help_heading = "Recording")]
     clear_screen: bool,
 
