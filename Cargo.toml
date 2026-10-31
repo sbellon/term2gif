@@ -23,7 +23,7 @@ ctrlc = "3.5"
 serde_json = "1"
 tempfile = "3"
 # Rendering: virtual terminal, font discovery, glyph rasterization, GIF encoding.
-avt = "0.18"
+avt = "0.19"
 fontdb = "0.24"
 swash = "0.2.10"
 gif = "0.14"
