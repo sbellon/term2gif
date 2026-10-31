@@ -10,7 +10,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
-use avt::Vt;
+use avt::Terminal;
 
 use crate::cast::{Event, Recording};
 use crate::encode::GifWriter;
@@ -81,7 +81,7 @@ pub struct Converter<'a, W: Write> {
     timing: &'a Timing,
     gif: GifWriter<W>,
     canvas: Canvas,
-    vt: Vt,
+    vt: Terminal,
     clock: Clock,
     /// Start of the frame that collects the latest events.
     frame_start: Option<f64>,
@@ -107,10 +107,7 @@ impl<'a, W: Write> Converter<'a, W> {
         let (width, height) = renderer.canvas_size(max_size.0, max_size.1);
         let mut gif = GifWriter::new(out, width, height, repeat)?;
         let mut canvas = Canvas::new(width, height);
-        let vt = Vt::builder()
-            .size(size.0, size.1)
-            .scrollback_limit(0)
-            .build();
+        let vt = Terminal::new(size.0, size.1)?;
         renderer.render(&vt, &mut canvas);
         gif.push(&canvas, 0)?;
         Ok(Converter {
@@ -150,7 +147,7 @@ impl<'a, W: Write> Converter<'a, W> {
 
         match event {
             Event::Output(data) => {
-                self.vt.feed_str(data);
+                self.vt.feed(data);
             }
             Event::Resize(cols, rows) => {
                 debug_assert!(self.fits(*cols, *rows));
