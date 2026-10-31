@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use avt::{Color, Vt};
+use avt::{Color, Terminal};
 
 use crate::boxdraw;
 use crate::font::{Bitmap, Fonts};
@@ -192,7 +192,7 @@ impl Renderer {
 
     /// Draws the terminal into the top left of `canvas`; the rest of the
     /// canvas gets the background color.
-    pub fn render(&mut self, vt: &Vt, canvas: &mut Canvas) {
+    pub fn render(&mut self, vt: &Terminal, canvas: &mut Canvas) {
         if self.scale == 1 {
             return self.draw(vt, canvas);
         }
@@ -206,7 +206,7 @@ impl Renderer {
         self.unscaled = Some(unscaled);
     }
 
-    fn draw(&mut self, vt: &Vt, canvas: &mut Canvas) {
+    fn draw(&mut self, vt: &Terminal, canvas: &mut Canvas) {
         let cell = self.fonts.cell;
         let (bg_default, fg_default) = (self.theme.background, self.theme.foreground);
         canvas.pixels.fill(pack(bg_default));
@@ -214,7 +214,7 @@ impl Renderer {
         let cursor = vt.cursor();
         let mut texts = Vec::new();
 
-        for (row, line) in vt.view().enumerate() {
+        for (row, line) in vt.screen().visible_lines().enumerate() {
             for (col, c) in line.cells().iter().enumerate() {
                 let cells = u32::from(c.width());
                 if cells == 0 {
