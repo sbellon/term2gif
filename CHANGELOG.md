@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+- `--clear-screen` clears the terminal when the recording starts, so that
+  on Windows the session starts at the top of the GIF instead of on the row
+  the cursor was on, with the rows above it empty (elsewhere the session
+  starts at the top anyway, and the option has no effect)
+
 ## 0.2.0 (2026-10-26)
 
 ### Changed
