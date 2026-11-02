@@ -31,6 +31,7 @@ Recording:
 | `--title <TITLE>` | Store a title in the recording |
 | `--keep-cast <FILE>` | Also keep the asciicast (`.cast`) recording |
 | `--from-cast <FILE>` | Do not record; render an existing asciicast v2 or v3 file |
+| `--clear-screen` | Clear the terminal when the recording starts, so that the session starts at the top of the GIF (only has an effect on Windows) |
 
 Rendering and timing:
 
