@@ -70,29 +70,6 @@ the start; if the terminal grows beyond it, the live GIF is dropped and the
 cast file is rendered once more afterwards. `--from-cast` skips the
 recording.
 
-- `src/main.rs` — command line, font selection (options, or xterm detection),
-  and the overall flow.
-- `src/recorder.rs` — runs the shell/command in a PTY (`portable-pty`: Unix
-  PTY, Windows ConPTY), mirrors output to the terminal, writes asciicast v2.
-  `src/utf8.rs` decodes PTY output that splits multi-byte characters.
-- `src/cast.rs` — reads asciicast v2 and v3.
-- `src/convert.rs` — replays events through `avt` (virtual terminal), one at
-  a time, applies idle limit / speed / fps cap, and feeds frames to the
-  encoder.
-- `src/render.rs` — draws the terminal state into an RGB canvas (largest
-  size of the session; `--scale` enlarges pixels for bitmap fonts).
-- `src/font.rs` — bundled DejaVu Sans Mono (`fonts/`), preferred system
-  families, X11 bitmap fonts, per-character fallback via `fontdb`, glyph
-  rasterization via `swash`. `src/boxdraw.rs` draws box drawing and block
-  characters procedurally so they connect at any line height.
-- `src/pcf.rs` reads X11 PCF bitmap fonts; `src/xfonts.rs` resolves xterm
-  font names (`fonts.alias`, `fonts.dir`, XLFD); `src/xterm.rs` detects the
-  font of the xterm term2gif runs in.
-- `src/encode.rs` — GIF output (`gif` crate): changed-rectangle frames,
-  unchanged pixels transparent, per-frame palette.
-- `src/progress.rs` — progress bar on stderr while rendering, only on a
-  terminal and after a second.
-
 ## Invariants
 
 - MIT licensed. Dependencies must be permissive (MIT, Apache-2.0, BSD,
