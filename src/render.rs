@@ -214,8 +214,8 @@ impl Renderer {
         let cursor = vt.cursor();
         let mut texts = Vec::new();
 
-        for (row, line) in vt.screen().visible_lines().enumerate() {
-            for (col, c) in line.cells().iter().enumerate() {
+        for (row, cells_row) in vt.screen().visible_rows().enumerate() {
+            for (col, c) in cells_row.cells().iter().enumerate() {
                 let cells = u32::from(c.width());
                 if cells == 0 {
                     continue; // right half of a wide character

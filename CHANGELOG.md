@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Changed
+- updated external dependencies (avt): DEL characters and screen/tmux
+  title strings (`ESC k … ESC \`) in the output are no longer drawn, and
+  `CSI 22 J` clears the screen
+
 ## 0.2.1 (2026-10-31)
 
 ### Added
